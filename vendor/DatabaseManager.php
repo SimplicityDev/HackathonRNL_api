@@ -61,7 +61,7 @@ class DatabaseManager
 	// Get all results
 	public function resultset($param = null) {
 		$this->sth->execute($param);
-		return $this->sth->fetchAll(PDO::FETCH_ASSOC);
+		return $this->sth->fetchAll(PDO::FETCH_OBJ);
 	}
 	// Get single result
 	public function single($param = null){

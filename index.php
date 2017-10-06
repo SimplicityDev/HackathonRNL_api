@@ -14,11 +14,15 @@ class Index {
  public $DBM;
  static $key = "T$#%YH$^^J$*K%";
  static $base_folder = "/redesign-Netherlands";
+ public $USER_ID = null;
      function __construct()
      {
         $this->DBM = new DatabaseManager();
          $this->RESPONSE = new stdClass();
-         $this->DATA = json_decode(file_get_contents('php://input')); #username && password
+           $this->USER = new stdClass();
+         $this->DATA = json_decode(file_get_contents('php://input'));
+        $this->DATA = empty($this->DATA)  ? new stdClass() : $this->DATA;
+
      }
 
     public function start(){
@@ -33,35 +37,38 @@ class Index {
             case Index::$base_folder.'/request/all':
                 $this->isAuthenticated();
                 $this->RESPONSE = $this->allRequests();
+                break; 
+            case Index::$base_folder.'/request/view':
+                $this->isAuthenticated();
+                $this->RESPONSE = $this->requestData();
+                break;
+            case Index::$base_folder.'/request/new-comment':
+                $this->isAuthenticated();
+                $this->RESPONSE = $this->newComment();
                 break;
         }
     }
-
+    // werkt
     private function auth(){
-        $data = array(
-            "username" => $this->DATA->username,
-            "password" => $this->DATA->password
-        );
-        $this->DBM->query("SELECT * FROM person WHERE Username = :u_name AND Password == :password");
 
-        $this->DBM->bind(':u_name', $data['username']);
-        $this->DBM->bind(':password', $data['password']);
+        $this->DBM->query("SELECT * FROM Person WHERE Name = :u_name AND Password = :password");
 
-        $result = $this->DBM->resultset()[0];
-        if ($result > 0) {
-            $response = new stdClass();
+        $this->DBM->bind(':u_name', $this->DATA->username);
+        $this->DBM->bind(':password', $this->DATA->password);
+
+        $result = $this->DBM->resultset();
+
+        $response = new stdClass();
+        
+        if ($result != null && $result > 0) {
+            
+
+            $user = new stdClass();
+            $user->id = $result[0]->Id;
 
             $response->success = true;
-            $response->token = JWT::encode($result, Index::$key);
-            $response->u_name = $result["Id"];
-            $response->u_pass = $result['Password'];
-            $response->u_name = $result['Name'];
-            $response->u_sofi = $result['Sofi'];
-            $response->u_email = $result['Email'];
-            $response->u_adress = $result['Adress'];
-            $response->u_organisation = $result['Organisation'];
-            $response->u_postalcode = $result['Postalcode'];
-            $response->u_logintoken = $result['Logintoken'];
+            $response->token = JWT::encode($user, Index::$key);
+            $response->user_id = $result[0]->Id;
 
             return $response;
         }else{
@@ -71,21 +78,20 @@ class Index {
             die;
         }
     }
-
+    // werkt
     private function allRequests() {
 
-        $this->DBM->query('SELECT * FROM request');
-        $result = $this->DBM->resultset()[0];
+        $this->DBM->query('SELECT * FROM request LEFT JOIN Person ON Person.Id = Request.Person_Id WHERE request.Person_Id = :p_id');
 
-        if ($result > 0) {
-            $response = new stdClass();
+        $this->DBM->bind(':p_id', $this->USER_ID);
+        $result = $this->DBM->resultset();
+        $response = new stdClass();
+
+        if ($result != null && $result > 0) {
 
             $response->success = true;
             $response->token = JWT::encode($result, Index::$key);
-
-            $response->r_id = $result['Id'];
-            $response->r_title = $result['Title'];
-            $response->r_desc = $result["Desc"];
+            $response->result = $result;
 
             return $response;
         }else{
@@ -96,71 +102,97 @@ class Index {
             die;
         }
     }
-
-    private function createRequest() {
-        $data = array(
-            'r_title' => $this->DATA->request_title,
-            'r_Desc' => $this->DATA->request_desc,
-            's_title' => $this->DATA->step_title,
-            's_desc' => $this->DATA->step_desc,
-            's_time' => $this->DATA->step_time);
-
-        $this->DBM->
-
-    }
-
-    private function insertComment() {
-        $this->DBM->query('INSERT INTO Comments VALUES(Type, Desc, Person_id');
-    }
-
-    private function requestData() {
-        $data = array('r_id' = $this->DATA->requestId);
-
+    // test
+    private function newComment() {
         $this->DBM->query('
-            SELECT 
-            s.*, 
-            r.*,
-            o.*,
-            p.Name
-            FROM 
-            steps s, 
-            request r, 
-            request_has_steps rhs,  
-            steps_has_comments shc, 
-            comments c, 
-            steps_has_organisation sho,
-            organisation o,
-            person p
-            WHERE
-            rhs.request_Id = r_id,
-            shc.steps_Id = s.Id,
-            sho.Organisation_Id = o.Id
-            ');
+            INSERT INTO Comments(Type, Desc, Person_id, Steps_id)  VALUES(:c_type, :c_desc, :p_id, s_id)');
 
-        $this->DBM->bind(':r_id',$data['r_id']);
+        var_dump($this->DATA);
+        var_dump($this->USER_ID);
 
-        $result =  $this->DBM->resultset();
+        $this->DBM->bind(':p_id', $this->USER_ID);
+        $this->DBM->bind(':c_type', $this->DATA->c_type);
+        $this->DBM->bind(':c_desc', $this->DATA->c_desc);
+        $this->DBM->bind(':s_id', $this->DATA->s_id);
 
-        if ($result > 0) {
-            $response = new stdClass();
-            // request data
-            $response->request_id = $result['r.Id'];
-            $response->request_title = $result['r.title'];
-            $response->request_desc = $result['r.desc'];
-            // step data
-            $response->step_id = $result['s.Id'];
-            $response->step_title = $result['s.Title'];
-            $response->step_desc = $result['s.Desc'];
-            $response->step_processtime = $result['s.Time'];
-            // comment data
-            $response->comment_Id = $result['c.Id'];
-            $response->comment_Type = $result['c.Type'];
-            $response->comment_Desc = $result['c.Desc'];
-            $response->comment_commenter =  $result['p.Name'];
+        $this->DBM->execute();
+    }
 
+    private function commentDataFromStep() {
+        $this->DBM->query('
+            SELECT * FROM comments 
+            LEFT JOIN Steps ON Steps_Id = Steps.Id
+            LEFT JOIN Persons ON Comments.Person_Id = Person.Id
+            WHERE Steps_Id = Steps.Id');
+
+        $this->DBM->resultset();
+
+        if ($result < 0) {
+            $response->c_title = $result['comments.Title'];
+            $response->c_desc = $result['comments.Desc'];
+            $response->c_commenter = $result['Person.Name'];
 
         }
     }
+
+    private function requestData() {
+
+        $this->DBM->query('
+            SELECT * FROM request_has_steps
+            LEFT JOIN steps ON request_has_steps.StepsId = steps.Id
+            LEFT JOIN steps_has_organization ON steps.Id = steps_has_organization.stepId
+            LEFT JOIN organization ON steps_has_organization.organizationId = organization.Id
+            LEFT JOIN comments ON steps.Id = comments.stepId
+            WHERE request.Id = :r_id
+            ');
+        var_dump($this->DATA);
+
+        $this->DBM->bind(':r_id',$this->DATA->r_id);
+
+        $result =  $this->DBM->resultset();
+        $response = new stdClass();
+
+        if ($result != null && $result > 0) {
+            $response = $result;
+            $response->success = true;
+            return $response;
+        } else {
+             $response->success = false;
+             $response->message = "error fetching requestdata";
+             echo json_encode($response);
+             die;
+        }
+    }
+
+    private function solutionFromStep() {
+        $this->DBM->query('
+            SELECT * FROM Solution 
+            LEFT JOIN Solutions_has_Steps ON Steps_Id = Steps.Id
+            lEFT JOIN Solutions_has_Steps ON Solutions_Id = Solutions.Id 
+            WHERE Steps.Id = :s_id');
+
+        $result = $DBM->resultset()[0];
+
+        if ($result > 0) {
+            $response = $result;
+            $response->success = true;
+            return $response;
+        }else{
+            $response->success = false;
+            $response->message = "Error fetching solutions for this particular step";
+        }
+    }
+
+
+    private function organizationOverview() {
+
+    }
+
+    private function addPersonToOrganization() {
+
+    }
+
+
 
 
     private function isAuthenticated(){
@@ -168,6 +200,7 @@ class Index {
      if(isset($_SERVER['HTTP_AUTH'])){
          try{
              $decoded = JWT::decode($_SERVER['HTTP_AUTH'], Index::$key, array('HS256'));
+
          }catch(Exception $exception){
              $response->success = false;
              $response->message = "invalid token";
@@ -181,6 +214,8 @@ class Index {
              echo json_encode($response);
              die;
          }
+
+        $this->USER_ID = $decoded->id;
      }else{
          $response->success = false;
          $response->message = "token not found";
@@ -196,3 +231,4 @@ $index->start();
 echo json_encode($index->RESPONSE);
 
 
+?>
