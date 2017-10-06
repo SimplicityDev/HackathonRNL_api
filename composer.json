@@ -1,0 +1,12 @@
+{
+    "name": "laptop/hackathon_api",
+    "require": {
+        "firebase/php-jwt": "^5.0"
+    },
+    "authors": [
+        {
+            "name": "Mike Donkers",
+            "email": "donkers.mbj@gmail.com"
+        }
+    ]
+}
